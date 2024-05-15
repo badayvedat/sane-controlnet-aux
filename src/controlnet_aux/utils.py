@@ -24,7 +24,13 @@ DEPTH_ANYTHING_MODEL_NAME = "LiheYoung/Depth-Anything"  # HF Space
 DIFFUSION_EDGE_MODEL_NAME = "hr16/Diffusion-Edge"
 
 temp_dir = tempfile.gettempdir()
-annotator_ckpts_path = os.path.join(Path(__file__).parents[2], "ckpts")
+
+HOME_DIR = os.environ.get(
+    "CONTROLNET_AUX_HOME", os.path.expanduser("~/.controlnet_aux")
+)
+
+annotator_ckpts_path = os.path.join(HOME_DIR, "ckpts")
+
 USE_SYMLINKS = False
 
 try:
@@ -34,8 +40,9 @@ except Exception:
     pass
 
 try:
-    USE_SYMLINKS = eval(os.environ["AUX_USE_SYMLINKS"])
-except Exception:
+    USE_SYMLINKS = os.environ["AUX_USE_SYMLINKS"] == "1"
+except Exception as e:
+    print(e)
     warnings.warn(
         "USE_SYMLINKS not set successfully. Using default value: False to download models."
     )
@@ -185,39 +192,6 @@ def resize_image_with_pad(
         return safer_memory(x[:H_target, :W_target, ...])
 
     return safer_memory(img_padded), remove_pad
-
-
-def common_input_validate(input_image, output_type, **kwargs):
-    if "img" in kwargs:
-        warnings.warn(
-            "img is deprecated, please use `input_image=...` instead.",
-            DeprecationWarning,
-        )
-        input_image = kwargs.pop("img")
-
-    if "return_pil" in kwargs:
-        warnings.warn(
-            "return_pil is deprecated. Use output_type instead.", DeprecationWarning
-        )
-        output_type = "pil" if kwargs["return_pil"] else "np"
-
-    if isinstance(output_type, bool):
-        warnings.warn(
-            "Passing `True` or `False` to `output_type` is deprecated and will raise an error in future versions"
-        )
-        if output_type:
-            output_type = "pil"
-
-    if input_image is None:
-        raise ValueError("input_image must be defined.")
-
-    if not isinstance(input_image, np.ndarray):
-        input_image = np.array(input_image, dtype=np.uint8)
-        output_type = output_type or "pil"
-    else:
-        output_type = output_type or "np"
-
-    return (input_image, output_type)
 
 
 def torch_gc():
@@ -522,7 +496,7 @@ def custom_hf_download(
     return model_path
 
 
-def load_image(image_path: str) -> np.ndarray:
+def load_image(image_path: str) -> Image.Image:
     """Load an image from a file path.
 
     Notes:
@@ -540,5 +514,4 @@ def load_image(image_path: str) -> np.ndarray:
     image = ImageOps.exif_transpose(image)
 
     image.convert("RGB")
-    image = np.asarray(image)
     return image
